@@ -35,6 +35,7 @@ func TestServer_setupInterceptors(t *testing.T) {
 }
 
 func TestServer(t *testing.T) {
+	SetServerSlowThreshold(time.Second)
 	srv := MustNewServer(RpcServerConf{
 		ServiceConf: service.ServiceConf{
 			Log: logx.LogConf{
@@ -52,7 +53,7 @@ func TestServer(t *testing.T) {
 	}, func(server *grpc.Server) {
 	})
 	srv.AddOptions(grpc.ConnectionTimeout(time.Hour))
-	srv.AddUnaryInterceptors(serverinterceptors.UnaryCrashInterceptor())
+	srv.AddUnaryInterceptors(serverinterceptors.UnaryCrashInterceptor)
 	srv.AddStreamInterceptors(serverinterceptors.StreamCrashInterceptor)
 	go srv.Start()
 	srv.Stop()
@@ -94,7 +95,7 @@ func TestServer_HasEtcd(t *testing.T) {
 	}, func(server *grpc.Server) {
 	})
 	srv.AddOptions(grpc.ConnectionTimeout(time.Hour))
-	srv.AddUnaryInterceptors(serverinterceptors.UnaryCrashInterceptor())
+	srv.AddUnaryInterceptors(serverinterceptors.UnaryCrashInterceptor)
 	srv.AddStreamInterceptors(serverinterceptors.StreamCrashInterceptor)
 	go srv.Start()
 	srv.Stop()

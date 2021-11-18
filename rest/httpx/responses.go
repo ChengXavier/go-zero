@@ -24,7 +24,12 @@ func Error(w http.ResponseWriter, err error) {
 		return
 	}
 
-	code, body := errorHandler(err)
+	code, body := handler(err)
+	if body == nil {
+		w.WriteHeader(code)
+		return
+	}
+
 	e, ok := body.(error)
 	if ok {
 		http.Error(w, e.Error(), code)

@@ -19,6 +19,12 @@ type (
 	}
 )
 
+// NewSessionFromTx returns a Session with the given sql.Tx.
+// Use it with caution, it's provided for other ORM to interact with.
+func NewSessionFromTx(tx *sql.Tx) Session {
+	return txSession{Tx: tx}
+}
+
 func (t txSession) Exec(q string, args ...interface{}) (sql.Result, error) {
 	return exec(t.Tx, q, args...)
 }
@@ -30,7 +36,8 @@ func (t txSession) Prepare(q string) (StmtSession, error) {
 	}
 
 	return statement{
-		stmt: stmt,
+		query: q,
+		stmt:  stmt,
 	}, nil
 }
 
@@ -70,9 +77,9 @@ func begin(db *sql.DB) (trans, error) {
 }
 
 func transact(db *commonSqlConn, b beginnable, fn func(Session) error) (err error) {
-	conn, err := getSqlConn(db.driverName, db.datasource)
+	conn, err := db.connProv()
 	if err != nil {
-		logInstanceError(db.datasource, err)
+		db.onError(err)
 		return err
 	}
 

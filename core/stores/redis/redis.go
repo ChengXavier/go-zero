@@ -9,6 +9,7 @@ import (
 	red "github.com/go-redis/redis"
 	"github.com/tal-tech/go-zero/core/breaker"
 	"github.com/tal-tech/go-zero/core/mapping"
+	"github.com/tal-tech/go-zero/core/syncx"
 )
 
 const (
@@ -21,12 +22,14 @@ const (
 
 	blockingQueryTimeout = 5 * time.Second
 	readWriteTimeout     = 2 * time.Second
-
-	slowThreshold = time.Millisecond * 100
+	defaultSlowThreshold = time.Millisecond * 100
 )
 
-// ErrNilNode is an error that indicates a nil redis node.
-var ErrNilNode = errors.New("nil redis node")
+var (
+	// ErrNilNode is an error that indicates a nil redis node.
+	ErrNilNode    = errors.New("nil redis node")
+	slowThreshold = syncx.ForAtomicDuration(defaultSlowThreshold)
+)
 
 type (
 	// Option defines the method to customize a Redis.
@@ -71,6 +74,8 @@ type (
 	IntCmd = red.IntCmd
 	// FloatCmd is an alias of redis.FloatCmd.
 	FloatCmd = red.FloatCmd
+	// StringCmd is an alias of redis.StringCmd.
+	StringCmd = red.StringCmd
 )
 
 // New returns a Redis with given options.
@@ -88,6 +93,7 @@ func New(addr string, opts ...Option) *Redis {
 	return r
 }
 
+// Deprecated: use New instead, will be removed in v2.
 // NewRedis returns a Redis.
 func NewRedis(redisAddr, redisType string, redisPass ...string) *Redis {
 	var opts []Option
@@ -1282,6 +1288,41 @@ func (s *Redis) Sdiffstore(destination string, keys ...string) (val int, err err
 	return
 }
 
+// Sinter is the implementation of redis sinter command.
+func (s *Redis) Sinter(keys ...string) (val []string, err error) {
+	err = s.brk.DoWithAcceptable(func() error {
+		conn, err := getRedis(s)
+		if err != nil {
+			return err
+		}
+
+		val, err = conn.SInter(keys...).Result()
+		return err
+	}, acceptable)
+
+	return
+}
+
+// Sinterstore is the implementation of redis sinterstore command.
+func (s *Redis) Sinterstore(destination string, keys ...string) (val int, err error) {
+	err = s.brk.DoWithAcceptable(func() error {
+		conn, err := getRedis(s)
+		if err != nil {
+			return err
+		}
+
+		v, err := conn.SInterStore(destination, keys...).Result()
+		if err != nil {
+			return err
+		}
+
+		val = int(v)
+		return nil
+	}, acceptable)
+
+	return
+}
+
 // Ttl is the implementation of redis ttl command.
 func (s *Redis) Ttl(key string) (val int, err error) {
 	err = s.brk.DoWithAcceptable(func() error {
@@ -1718,6 +1759,11 @@ func Cluster() Option {
 	return func(r *Redis) {
 		r.Type = ClusterType
 	}
+}
+
+// SetSlowThreshold sets the slow threshold.
+func SetSlowThreshold(threshold time.Duration) {
+	slowThreshold.Set(threshold)
 }
 
 // WithPass customizes the given Redis with given password.
